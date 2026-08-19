@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function untuk memeriksa autentikasi
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function untuk mengambil data user
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Helper functions untuk memeriksa role
+    function hasRole(role) {
+      return isAuthenticated() && getUserData().role == role;
+    }
+    
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    function isWaliKelas() {
+      return hasRole('wali_kelas');
+    }
+    
+    function isGuruBK() {
+      return hasRole('bk');
+    }
+    
+    function isGuruPiket() {
+      return hasRole('piket');
+    }
+    
+    function isGuru() {
+      return hasRole('teacher');
+    }
+    
+    function isStudent() {
+      return hasRole('student');
+    }
+
+    // Collection 'users'
+    // User terautentikasi bisa membaca profile, hanya Admin atau pemilik dokumen yang bisa menulis
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+    }
+
+    // Collection 'materi'
+    // Dibaca oleh semua user yang login, ditulis oleh guru mapel atau admin
+    match /materi/{materiId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin() || isGuru();
+    }
+
+    // Collection 'tugas'
+    // Dibaca oleh semua user yang login, ditulis oleh guru mapel atau admin
+    match /tugas/{tugasId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isAdmin() || isGuru();
+      allow update: if isAdmin() || isGuru() ||
+        (isStudent() && request.resource.data.submissions[request.auth.uid].status in ['Dikumpulkan', 'Selesai']);
+    }
+
+    // Collection 'attendance'
+    // Dibaca oleh semua user terautentikasi.
+    // Ditulis oleh admin, guru mapel, wali kelas, guru piket, atau siswa untuk absensi mandiri dirinya sendiri.
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() || isGuru() || isWaliKelas() || isGuruPiket() ||
+        (isStudent() && request.resource.data.studentId == request.auth.uid);
+      allow delete: if isAdmin() || isGuru() || isWaliKelas() || isGuruPiket();
+    }
+
+    // Collection 'reports'
+    // Siswa dapat membuat dan membaca aduannya sendiri. Guru BK dan admin dapat membaca dan menindaklanjuti semua aduan.
+    match /reports/{reportId} {
+      allow read: if isAdmin() || isGuruBK() ||
+        (isStudent() && resource.data.studentId == request.auth.uid);
+      allow create: if isStudent() && request.resource.data.studentId == request.auth.uid;
+      allow update, delete: if isAdmin() || isGuruBK();
+    }
+
+    // Collection 'incident_logs'
+    // Guru piket dan admin menulis catatan kejadian harian, semua user terautentikasi dapat membaca.
+    match /incident_logs/{logId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin() || isGuruPiket();
+    }
+
+    // Collection 'pelanggaran'
+    // Dibuat/diupdate oleh WALI_KELAS, GURU_BK, GURU_PIKET, atau ADMIN
+    match /pelanggaran/{pelanggaranId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() || isWaliKelas() || isGuruBK() || isGuruPiket();
+      allow delete: if isAdmin();
+    }
+
+    // Collection 'konseling'
+    // Hanya bisa dibaca/ditulis oleh siswa bersangkutan atau GURU_BK
+    match /konseling/{konselingId} {
+      allow read, write: if isAdmin() || isGuruBK() || 
+        (isAuthenticated() && resource.data.studentId == request.auth.uid) ||
+        (isAuthenticated() && request.resource.data.studentId == request.auth.uid);
+    }
+  }
+}

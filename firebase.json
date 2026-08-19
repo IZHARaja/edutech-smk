@@ -1,0 +1,20 @@
+{
+	"flutter": {
+		"platforms": {
+			"dart": {
+				"lib/firebase_options.dart": {
+					"projectId": "edutech-smk-dd479",
+					"configurations": {
+						"web": "1:105620389401:web:7c5c2d1efe98bd63b53488"
+					}
+				}
+			}
+		}
+	},
+	"firestore": {
+		"rules": "firestore.rules"
+	},
+	"storage": {
+		"rules": "storage.rules"
+	}
+}
